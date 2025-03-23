@@ -1,0 +1,258 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 40% 98%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83% 53.3%;
+    --radius: 0.75rem;
+    
+    /* Theme colors */
+    --theme-color: #0070f3;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
+  }
+
+  .oled {
+    --background: 0 0% 0%;
+    --foreground: 0 0% 100%;
+    --card: 0 0% 3%; /* Slight gray instead of pure black for cards */
+    --card-foreground: 0 0% 100%;
+    --popover: 0 0% 3%;
+    --popover-foreground: 0 0% 100%;
+    --primary: 217.2 91.2% 59.8%; /* Keep accent colors vibrant */
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 0 0% 5%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 5%;
+    --muted-foreground: 0 0% 63.9%;
+    --accent: 0 0% 5%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 12%;
+    --input: 0 0% 7%;
+    --ring: var(--theme-color);
+  }
+  
+  /* Blue theme - default */
+  [data-color-scheme="blue"] {
+    --theme-color: #0070f3;
+  }
+  
+  /* Cyan theme */
+  [data-color-scheme="cyan"] {
+    --theme-color: #00bcd4;
+  }
+  
+  /* Purple theme */
+  [data-color-scheme="purple"] {
+    --theme-color: #6200ee;
+  }
+  
+  /* Amber theme */
+  [data-color-scheme="amber"] {
+    --theme-color: #ff8f00;
+  }
+  
+  /* Pink theme */
+  [data-color-scheme="pink"] {
+    --theme-color: #e91e63;
+  }
+  
+  /* Green theme */
+  [data-color-scheme="green"] {
+    --theme-color: #10b981;
+  }
+  
+  /* Teal theme */
+  [data-color-scheme="teal"] {
+    --theme-color: #14b8a6;
+  }
+  
+  /* Orange theme */
+  [data-color-scheme="orange"] {
+    --theme-color: #f97316;
+  }
+  
+  /* Red theme */
+  [data-color-scheme="red"] {
+    --theme-color: #ef4444;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "ss01", "ss02", "cv01", "cv02", "cv03";
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-medium tracking-tight;
+  }
+
+  h1 {
+    @apply text-4xl;
+  }
+
+  h2 {
+    @apply text-3xl;
+  }
+
+  h3 {
+    @apply text-2xl;
+  }
+
+  h4 {
+    @apply text-xl;
+  }
+
+  h5 {
+    @apply text-lg;
+  }
+
+  h6 {
+    @apply text-base;
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl shadow-glass;
+  }
+
+  .dark .glass {
+    @apply bg-black/10 border-black/20;
+  }
+  
+  .oled .glass {
+    @apply bg-black/30 border-white/10 shadow-none;
+  }
+
+  .neomorphic {
+    @apply bg-background rounded-2xl shadow-neomorphic border border-transparent;
+  }
+
+  .dark .neomorphic {
+    @apply shadow-neomorphic-dark;
+  }
+  
+  .oled .neomorphic {
+    @apply bg-card border-white/5 shadow-none;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .animation-delay-100 {
+    animation-delay: 100ms;
+  }
+
+  .animation-delay-200 {
+    animation-delay: 200ms;
+  }
+
+  .animation-delay-300 {
+    animation-delay: 300ms;
+  }
+
+  .animation-delay-400 {
+    animation-delay: 400ms;
+  }
+
+  .animation-delay-500 {
+    animation-delay: 500ms;
+  }
+
+  .page-transition-enter {
+    @apply opacity-0;
+  }
+
+  .page-transition-enter-active {
+    @apply opacity-100 transition-opacity duration-300;
+  }
+
+  .page-transition-exit {
+    @apply opacity-100;
+  }
+
+  .page-transition-exit-active {
+    @apply opacity-0 transition-opacity duration-200;
+  }
+  
+  /* Theme-based button styles */
+  .btn-theme {
+    background-color: var(--theme-color);
+    color: white;
+  }
+  
+  .text-theme {
+    color: var(--theme-color);
+  }
+  
+  .border-theme {
+    border-color: var(--theme-color);
+  }
+  
+  .ring-theme {
+    --tw-ring-color: var(--theme-color);
+  }
+  
+  /* OLED mode specific styles */
+  .oled .btn-theme {
+    background-color: var(--theme-color);
+    color: black;
+  }
+  
+  .oled .card {
+    @apply bg-card border-white/5;
+  }
+  
+  .oled .ring-theme {
+    --tw-ring-color: var(--theme-color);
+  }
+}
