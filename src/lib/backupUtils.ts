@@ -1,7 +1,32 @@
-
 /**
- * Utilities for backup and restore functionality
+ * Utilities for backup and restore functionality with MongoDB integration
  */
+import axios from 'axios';
+import { StoredPassword } from './db';
+import { encrypt as encryptPassword, decrypt as decryptPassword } from './encryption';
+
+// API Base URL
+const API_URL = 'http://localhost:5000/api';
+
+// Axios instance with auth token
+const api = axios.create({
+  baseURL: API_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Add auth token to requests
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
 
 // List of simple 3-5 letter words for recovery phrases
 const wordList = [
@@ -82,19 +107,44 @@ export function decryptBackupData(encryptedData: string, recoveryPhrase: string)
 }
 
 /**
- * Create a backup of user data
+ * Create a backup of user data from MongoDB
  */
-export function createBackup(userId: string, password: string, recoveryPhrase: string): Blob {
-  // Get all data from localStorage
+export async function createBackup(userId: string, password: string, recoveryPhrase: string): Promise<Blob> {
+  // Data structure for the backup
   const data: Record<string, any> = {
     passwords: [],
     timestamp: Date.now()
   };
   
   try {
-    // Get passwords data
-    const dbData = JSON.parse(localStorage.getItem("password_manager_data") || '{"passwords":[]}');
-    data.passwords = dbData.passwords.filter((p: any) => p.userId === userId);
+    // Fetch passwords from MongoDB via API
+    const response = await api.get('/passwords');
+    
+    if (response.data && Array.isArray(response.data)) {
+      // Get the encryption key
+      const encryptionKey = `crypticChest_${userId}_key`;
+      
+      // Add all passwords to the backup, decrypting them first then re-encrypting with the recovery phrase
+      data.passwords = response.data.map((p: any) => {
+        // Decrypt the password from MongoDB format using the user's encryption key
+        const decryptedPassword = decryptPassword(p.password, encryptionKey);
+        
+        // Create a clean password object for the backup
+        return {
+          id: p._id || p.id,
+          userId: p.userId,
+          url: p.url,
+          username: p.username,
+          password: decryptedPassword, // Store password in decrypted form within the encrypted backup
+          name: p.name,
+          category: p.category || '',
+          notes: p.notes || '',
+          favorite: p.favorite || false,
+          createdAt: p.createdAt || Date.now(),
+          updatedAt: p.updatedAt || Date.now()
+        };
+      });
+    }
     
     // Stringify the data
     const jsonData = JSON.stringify(data);
@@ -106,14 +156,14 @@ export function createBackup(userId: string, password: string, recoveryPhrase: s
     return new Blob([encryptedData], { type: "application/json" });
   } catch (error) {
     console.error("Backup creation error:", error);
-    throw new Error("Failed to create backup");
+    throw new Error("Failed to create backup from MongoDB");
   }
 }
 
 /**
- * Restore data from a backup file
+ * Restore data from a backup file to MongoDB
  */
-export function restoreFromBackup(backupData: string, recoveryPhrase: string, userId: string): void {
+export async function restoreFromBackup(backupData: string, recoveryPhrase: string, userId: string): Promise<void> {
   try {
     // Decrypt the backup data
     const decryptedData = decryptBackupData(backupData, recoveryPhrase);
@@ -126,23 +176,36 @@ export function restoreFromBackup(backupData: string, recoveryPhrase: string, us
       throw new Error("Invalid backup data");
     }
     
-    // Get existing data
-    const existingData = JSON.parse(localStorage.getItem("password_manager_data") || '{"passwords":[]}');
+    // Get encryption key for re-encrypting passwords
+    const encryptionKey = `crypticChest_${userId}_key`;
     
-    // Remove existing passwords for this user
-    existingData.passwords = existingData.passwords.filter((p: any) => p.userId !== userId);
+    // Delete existing passwords for this user via API
+    const existingPasswords = await api.get('/passwords');
+    if (existingPasswords.data && Array.isArray(existingPasswords.data)) {
+      for (const pwd of existingPasswords.data) {
+        if (pwd.userId === userId) {
+          await api.delete(`/passwords/${pwd._id || pwd.id}`);
+        }
+      }
+    }
     
-    // Update passwords with the backup data, but ensure they have the current userId
-    const updatedPasswords = data.passwords.map((p: any) => ({
-      ...p,
-      userId // Make sure the passwords are associated with the current user
-    }));
-    
-    // Add the restored passwords
-    existingData.passwords = [...existingData.passwords, ...updatedPasswords];
-    
-    // Save the updated data
-    localStorage.setItem("password_manager_data", JSON.stringify(existingData));
+    // Create new password entries from backup data
+    for (const password of data.passwords) {
+      // Create a new password entry with MongoDB structure
+      const newPasswordEntry = {
+        userId,
+        url: password.url,
+        username: password.username,
+        password: encryptPassword(password.password, encryptionKey), // Re-encrypt for MongoDB storage
+        name: password.name,
+        category: password.category,
+        notes: password.notes,
+        favorite: password.favorite
+      };
+      
+      // Add password to MongoDB via API
+      await api.post('/passwords', newPasswordEntry);
+    }
     
     return;
   } catch (error) {

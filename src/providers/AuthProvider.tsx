@@ -1,33 +1,57 @@
 import { useState, useEffect } from "react";
 import { AuthContext } from "@/contexts/AuthContext";
 import { User, ProfileUpdateData } from "@/types/auth.types";
+import axios from "axios";
+import { clearPasswordCache } from "@/lib/db"; // Import the clear cache function
+
+// API URL - make sure it matches the server address
+const API_URL = 'http://localhost:5000/api';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Create an axios instance with Authorization header
+  const api = axios.create({
+    baseURL: API_URL,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  // Add token to all requests
+  api.interceptors.request.use(
+    (config) => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      return config;
+    },
+    (error) => Promise.reject(error)
+  );
+
   useEffect(() => {
-    // Check for saved authentication state on mount
-    const checkAuth = () => {
-      const savedUser = localStorage.getItem("user");
+    // Check for valid token on mount
+    const checkAuth = async () => {
+      const token = localStorage.getItem('token');
       
-      if (savedUser) {
-        const parsedUser = JSON.parse(savedUser);
-        
-        // Always prioritize profile-specific data for consistency
-        const profileData = localStorage.getItem(`user_profile_${parsedUser.email}`);
-        
-        if (profileData) {
-          try {
-            const profileUser = JSON.parse(profileData);
-            console.log("Loaded profile data:", profileUser);
-            setUser(profileUser);
-          } catch (e) {
-            console.error("Error parsing profile data:", e);
-            setUser(parsedUser);
-          }
-        } else {
-          setUser(parsedUser);
+      if (token) {
+        try {
+          // Verify token with backend
+          const response = await api.get('/auth/current-user');
+          
+          // Set user from API response - NO PASSWORDS stored in user object
+          setUser({
+            id: response.data._id,
+            name: response.data.username,
+            email: response.data.email
+          });
+        } catch (error) {
+          // Token invalid or expired
+          console.error("Authentication error:", error);
+          localStorage.removeItem('token');
+          setUser(null);
         }
       }
       
@@ -41,52 +65,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     
     try {
-      // In a real app, you would verify with server
-      // For demo, we'll simulate authentication
+      // Call API to login
+      const response = await api.post('/auth/login', {
+        email,
+        password
+      });
       
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Store token but NOT the password
+      localStorage.setItem('token', response.data.token);
       
-      // Check if this user has previously registered
-      const existingUserData = localStorage.getItem(`user_profile_${email}`);
+      // Set user data - NO PASSWORD stored in localStorage
+      const userData: User = {
+        id: response.data.user.id,
+        name: response.data.user.username,
+        email: response.data.user.email
+      };
       
-      // If no user found with this email, throw error
-      if (!existingUserData) {
-        throw new Error("User not found. Please register first.");
-      }
-      
-      // Get the password for this user (in a real app, you'd compare hashed passwords)
-      const passwordKey = `user_password_${email}`;
-      const storedPassword = localStorage.getItem(passwordKey);
-      
-      // If no password is stored (which would be the case for first-time users after this update)
-      // We'll set a default password "password123" for testing
-      if (!storedPassword) {
-        localStorage.setItem(passwordKey, "password123");
-        
-        // If entered password doesn't match our default test password
-        if (password !== "password123") {
-          throw new Error("Invalid password. For demo, try 'password123'");
-        }
-      } else {
-        // Check if password matches
-        if (password !== storedPassword) {
-          throw new Error("Invalid password");
-        }
-      }
-      
-      // At this point, authentication is successful
-      let mockUser: User = JSON.parse(existingUserData);
-      
-      // Store user in local storage
-      localStorage.setItem("user", JSON.stringify(mockUser));
-      setUser(mockUser);
+      setUser(userData);
     } catch (error) {
       console.error("Login failed:", error);
-      if (error instanceof Error) {
-        throw error; // Rethrow the original error to preserve the message
+      if (axios.isAxiosError(error) && error.response) {
+        throw new Error(error.response.data.message || "Invalid credentials");
       } else {
-        throw new Error("Invalid credentials");
+        throw new Error("Login failed. Check your internet connection.");
       }
     } finally {
       setIsLoading(false);
@@ -97,101 +98,110 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     
     try {
-      // In a real app, you would register with server
-      // For demo, we'll simulate registration
+      // Generate a random recovery phrase - in a real app, use a better method
+      const recoveryPhrase = Math.random().toString(36).substring(2, 15);
       
-      // Check if user already exists
-      const existingUser = localStorage.getItem(`user_profile_${email}`);
-      if (existingUser) {
-        throw new Error("User with this email already exists");
-      }
+      // Call API to register
+      const response = await api.post('/auth/register', {
+        username: name,
+        email,
+        password,
+        recoveryPhrase
+      });
       
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Store token but NOT the password
+      localStorage.setItem('token', response.data.token);
       
-      const mockUser: User = {
-        id: "user-" + Date.now(),
-        name: name,
-        email: email
+      // Set user data - NO PASSWORD stored in the state or localStorage
+      const userData: User = {
+        id: response.data.user.id,
+        name: response.data.user.username,
+        email: response.data.user.email,
+        recoveryPhrase // Store recovery phrase temporarily for display to user
       };
       
-      // Store initial profile in user-specific storage
-      localStorage.setItem(`user_profile_${email}`, JSON.stringify(mockUser));
+      setUser(userData);
       
-      // Store the password
-      localStorage.setItem(`user_password_${email}`, password);
-      
-      // Store user in session storage
-      localStorage.setItem("user", JSON.stringify(mockUser));
-      setUser(mockUser);
+      // Return the recovery phrase so it can be shown to user
+      return recoveryPhrase;
     } catch (error) {
       console.error("Registration failed:", error);
-      throw new Error(error instanceof Error ? error.message : "Registration failed");
+      if (axios.isAxiosError(error) && error.response) {
+        throw new Error(error.response.data.message || "Registration failed");
+      } else {
+        throw new Error("Registration failed. Check your internet connection.");
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   const logout = () => {
-    localStorage.removeItem("user");
+    localStorage.removeItem('token');
+    // Clear any in-memory password cache to prevent data leakage after logout
+    clearPasswordCache();
     setUser(null);
   };
 
-  const updateUserProfile = (data: ProfileUpdateData) => {
+  const updateUserProfile = async (data: ProfileUpdateData) => {
     if (!user) return;
-
-    // Create a properly updated user object with all changes
-    const updatedUser = {
-      ...user,
-      ...data
-    };
-
-    console.log("Updating profile to:", updatedUser);
-
-    // Update local storage for the current session
-    localStorage.setItem("user", JSON.stringify(updatedUser));
     
-    // Also update the user-specific profile storage for persistence between sessions
-    localStorage.setItem(`user_profile_${user.email}`, JSON.stringify(updatedUser));
-    
-    // Update state
-    setUser(updatedUser);
+    try {
+      // In a full implementation, you'd have an API endpoint for profile updates
+      // For now, we'll just update the local state
+      
+      // Create a properly updated user object with all changes
+      const updatedUser = {
+        ...user,
+        ...data
+      };
+      
+      // Update state
+      setUser(updatedUser);
+      
+      return true;
+    } catch (error) {
+      console.error("Profile update failed:", error);
+      return false;
+    }
   };
 
   const updatePassword = async (currentPassword: string, newPassword: string) => {
     if (!user) throw new Error("User not authenticated");
     
     try {
-      // In a real app, you would verify with server
-      // For demo, we'll simulate password update
-      
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Verify the current password
-      const passwordKey = `user_password_${user.email}`;
-      const storedPassword = localStorage.getItem(passwordKey);
-      
-      // If no stored password, we'll use our default
-      if (!storedPassword) {
-        if (currentPassword !== "password123") {
-          return Promise.reject(new Error("Current password is incorrect"));
-        }
-      } else {
-        // Verify the current password matches
-        if (currentPassword !== storedPassword) {
-          return Promise.reject(new Error("Current password is incorrect"));
-        }
-      }
-      
-      // Save the new password
-      localStorage.setItem(passwordKey, newPassword);
-      console.log("Password updated successfully");
+      // Call API to update password
+      await api.post('/auth/change-password', {
+        currentPassword,
+        newPassword
+      });
       
       return Promise.resolve();
     } catch (error) {
       console.error("Password update failed:", error);
+      if (axios.isAxiosError(error) && error.response) {
+        return Promise.reject(new Error(error.response.data.message || "Password update failed"));
+      }
       return Promise.reject(new Error("Password update failed"));
+    }
+  };
+
+  const resetPassword = async (email: string, recoveryPhrase: string, newPassword: string) => {
+    try {
+      // Call API to reset password
+      await api.post('/auth/recover', {
+        email,
+        recoveryPhrase,
+        newPassword
+      });
+      
+      return true;
+    } catch (error) {
+      console.error("Password reset failed:", error);
+      if (axios.isAxiosError(error) && error.response) {
+        throw new Error(error.response.data.message || "Password reset failed");
+      }
+      throw new Error("Password reset failed");
     }
   };
 
@@ -199,20 +209,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user) throw new Error("User not authenticated");
     
     try {
-      // In a real app, you would verify with server
-      // For demo, we'll simulate account deletion
+      // Call API to delete account
+      await api.post('/auth/delete-account', { password });
       
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Remove all user data from localStorage
-      localStorage.removeItem(`user_profile_${user.email}`);
-      localStorage.removeItem("user");
-      
-      // Clear any other user-specific data
-      // This would depend on what data you store for users
-      
-      // Update state
+      // Clean up client-side
+      localStorage.removeItem('token');
+      clearPasswordCache();
       setUser(null);
       
       return Promise.resolve();
@@ -233,6 +235,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         logout,
         updateUserProfile,
         updatePassword,
+        resetPassword,
         deleteAccount,
       }}
     >

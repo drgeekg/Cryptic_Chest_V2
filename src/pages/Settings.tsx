@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -27,9 +27,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Eye, EyeOff, UploadCloud, DownloadCloud, Database, RefreshCcw, Trash2 } from "lucide-react";
-import { getPasswords, deletePassword } from "@/lib/db";
-import { encrypt, decrypt } from "@/lib/encryption";
+import { Eye, EyeOff, UploadCloud, DownloadCloud, RefreshCcw, Trash2 } from "lucide-react";
+import axios from 'axios';
+import { clearPasswordCache } from "@/lib/db";
 import { 
   generateRecoveryPhrase, 
   createBackup, 
@@ -40,14 +40,15 @@ import { BackupPasswordDialog } from "@/components/settings/BackupPasswordDialog
 import { RecoveryPhraseInputDialog } from "@/components/settings/RecoveryPhraseInputDialog";
 import { useNavigate } from "react-router-dom";
 
+// API URL
+const API_URL = 'http://localhost:5000/api';
+
 export default function Settings() {
   const { theme, setTheme, colorScheme, setColorScheme } = useTheme();
   const { user, updateUserProfile, deleteAccount } = useAuth();
   const navigate = useNavigate();
   const [resetPassword, setResetPassword] = useState("");
   const [showResetPassword, setShowResetPassword] = useState(false);
-  const [mongoUrl, setMongoUrl] = useState("");
-  const [showMongoUrl, setShowMongoUrl] = useState(false);
   const [recoveryPhrase, setRecoveryPhrase] = useState("");
   const [showRecoveryDialog, setShowRecoveryDialog] = useState(false);
   const [showBackupPasswordDialog, setShowBackupPasswordDialog] = useState(false);
@@ -55,8 +56,29 @@ export default function Settings() {
   const [showRecoveryPhraseInputDialog, setShowRecoveryPhraseInputDialog] = useState(false);
   const [deleteAccountPassword, setDeleteAccountPassword] = useState("");
   const [showDeletePassword, setShowDeletePassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   
-  const handleResetData = () => {
+  // Create an axios instance with Authorization header
+  const api = axios.create({
+    baseURL: API_URL,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  // Add token to requests
+  api.interceptors.request.use(
+    (config) => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      return config;
+    },
+    (error) => Promise.reject(error)
+  );
+
+  const handleResetData = async () => {
     if (!user) return;
     
     if (resetPassword.length < 4) {
@@ -64,17 +86,24 @@ export default function Settings() {
       return;
     }
     
+    setIsLoading(true);
+    
     try {
-      const userPasswords = getPasswords(user.id);
-      userPasswords.forEach(password => {
-        deletePassword(password.id);
+      // In the MongoDB implementation, we need to delete all passwords via API
+      const response = await api.delete(`/passwords/user/${user.id}`, {
+        data: { password: resetPassword }
       });
       
       setResetPassword("");
       toast.success("All account data has been reset successfully");
+      
+      // Clear the password cache
+      clearPasswordCache();
     } catch (error) {
       console.error("Error resetting data:", error);
-      toast.error("Failed to reset account data");
+      toast.error("Failed to reset account data. Please check your password.");
+    } finally {
+      setIsLoading(false);
     }
   };
   
@@ -83,14 +112,17 @@ export default function Settings() {
     setShowBackupPasswordDialog(true);
   };
   
-  const processBackupCreation = (password: string) => {
+  const processBackupCreation = async (password: string) => {
     if (!user) return;
+    
+    setIsLoading(true);
     
     try {
       const phrase = generateRecoveryPhrase();
       setRecoveryPhrase(phrase);
       
-      const backupBlob = createBackup(user.id, password, phrase);
+      // Create backup using our updated MongoDB-compatible backup function
+      const backupBlob = await createBackup(user.id, password, phrase);
       
       const url = URL.createObjectURL(backupBlob);
       const a = document.createElement('a');
@@ -108,7 +140,9 @@ export default function Settings() {
       setShowBackupPasswordDialog(false);
     } catch (error) {
       console.error("Error creating backup:", error);
-      toast.error("Failed to create backup");
+      toast.error("Failed to create backup. Please check your connection.");
+    } finally {
+      setIsLoading(false);
     }
   };
   
@@ -123,18 +157,21 @@ export default function Settings() {
     e.target.value = '';
   };
   
-  const processBackupRestore = (recoveryPhrase: string) => {
+  const processBackupRestore = async (recoveryPhrase: string) => {
     if (!selectedFile || !user) return;
+    
+    setIsLoading(true);
     
     const reader = new FileReader();
     
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
         if (!event.target || typeof event.target.result !== 'string') {
           throw new Error("Failed to read file");
         }
         
-        restoreFromBackup(event.target.result, recoveryPhrase, user.id);
+        // Use our updated MongoDB compatible restore function
+        await restoreFromBackup(event.target.result, recoveryPhrase, user.id);
         
         toast.success("Backup restored successfully");
         setShowRecoveryPhraseInputDialog(false);
@@ -142,19 +179,12 @@ export default function Settings() {
       } catch (error) {
         console.error("Error restoring backup:", error);
         toast.error("Failed to restore backup. Check your recovery phrase.");
+      } finally {
+        setIsLoading(false);
       }
     };
     
     reader.readAsText(selectedFile);
-  };
-  
-  const handleTestConnection = () => {
-    if (!mongoUrl) {
-      toast.error("Please enter a MongoDB connection string");
-      return;
-    }
-    
-    toast.success("Connection test successful!");
   };
   
   const handleDeleteAccount = async () => {
@@ -165,16 +195,26 @@ export default function Settings() {
       return;
     }
     
+    setIsLoading(true);
+    
     try {
+      // Call the deleteAccount function from AuthProvider
       await deleteAccount(deleteAccountPassword);
+      
+      // Additional cleanup if needed
+      clearPasswordCache();
+      
       toast.success("Your account has been deleted");
       navigate("/login");
     } catch (error) {
       console.error("Error deleting account:", error);
-      toast.error("Failed to delete account");
+      toast.error("Failed to delete account. Please check your password.");
+    } finally {
+      setIsLoading(false);
+      setDeleteAccountPassword("");
     }
   };
-  
+
   return (
     <div className="container max-w-4xl py-6 space-y-8">
       <motion.div
@@ -196,9 +236,6 @@ export default function Settings() {
           </TabsTrigger>
           <TabsTrigger value="backup" className="h-9">
             Backup & Restore
-          </TabsTrigger>
-          <TabsTrigger value="mongodb" className="h-9">
-            MongoDB
           </TabsTrigger>
           <TabsTrigger value="account" className="h-9">
             Account
@@ -456,7 +493,7 @@ export default function Settings() {
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Create an encrypted backup of all your passwords. You can restore from this backup if you need to recover your data.
+                Create an encrypted backup of all your passwords from MongoDB. You can restore from this backup if you need to recover your data.
               </p>
             </CardContent>
             <CardFooter className="flex flex-col sm:flex-row sm:justify-between gap-4">
@@ -467,11 +504,13 @@ export default function Settings() {
                   className="hidden"
                   accept=".json"
                   onChange={handleRestoreFileSelect}
+                  disabled={isLoading}
                 />
                 <Button 
                   variant="outline"
                   onClick={() => document.getElementById('backup-file')?.click()}
                   className="flex items-center gap-2"
+                  disabled={isLoading}
                 >
                   <UploadCloud className="h-4 w-4" />
                   Restore Backup
@@ -480,62 +519,16 @@ export default function Settings() {
                 <Button 
                   onClick={handleCreateBackup}
                   className="flex items-center gap-2"
+                  disabled={isLoading}
                 >
-                  <DownloadCloud className="h-4 w-4" />
+                  {isLoading ? (
+                    <RefreshCcw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <DownloadCloud className="h-4 w-4" />
+                  )}
                   Create Backup
                 </Button>
               </div>
-            </CardFooter>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="mongodb" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>MongoDB Connection</CardTitle>
-              <CardDescription>
-                Configure your MongoDB connection for offline storage
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="mongo-url">MongoDB Connection String</Label>
-                <div className="relative">
-                  <Input 
-                    id="mongo-url" 
-                    placeholder="mongodb://localhost:27017/password-manager"
-                    type={showMongoUrl ? "text" : "password"}
-                    value={mongoUrl}
-                    onChange={(e) => setMongoUrl(e.target.value)}
-                    className="pr-10"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-0 top-0 h-full w-10 text-muted-foreground"
-                    onClick={() => setShowMongoUrl(!showMongoUrl)}
-                  >
-                    {showMongoUrl ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                    <span className="sr-only">
-                      {showMongoUrl ? "Hide connection string" : "Show connection string"}
-                    </span>
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Enter your MongoDB connection string to store passwords locally
-                </p>
-              </div>
-            </CardContent>
-            <CardFooter className="flex justify-end">
-              <Button onClick={handleTestConnection} className="flex items-center gap-2">
-                <Database className="h-4 w-4" />
-                Test Connection
-              </Button>
             </CardFooter>
           </Card>
         </TabsContent>
@@ -553,7 +546,7 @@ export default function Settings() {
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Warning: This action will permanently delete your account and all your data. 
+                Warning: This action will permanently delete your account and all your data.
                 This cannot be undone. Please enter your password to confirm.
               </p>
               
@@ -566,6 +559,7 @@ export default function Settings() {
                     value={deleteAccountPassword}
                     onChange={(e) => setDeleteAccountPassword(e.target.value)}
                     className="pr-10"
+                    disabled={isLoading}
                   />
                   <Button
                     type="button"
@@ -573,6 +567,7 @@ export default function Settings() {
                     size="icon"
                     className="absolute right-0 top-0 h-full w-10 text-muted-foreground"
                     onClick={() => setShowDeletePassword(!showDeletePassword)}
+                    disabled={isLoading}
                   >
                     {showDeletePassword ? (
                       <EyeOff className="h-4 w-4" />
@@ -589,8 +584,16 @@ export default function Settings() {
             <CardFooter>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button variant="destructive" className="flex items-center gap-2">
-                    <Trash2 className="h-4 w-4" />
+                  <Button 
+                    variant="destructive" 
+                    className="flex items-center gap-2"
+                    disabled={isLoading || deleteAccountPassword.length < 4}
+                  >
+                    {isLoading ? (
+                      <RefreshCcw className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
                     Delete Account
                   </Button>
                 </AlertDialogTrigger>
@@ -627,13 +630,17 @@ export default function Settings() {
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Reset application data by deleting all stored passwords. 
+                Reset application data by deleting all stored passwords.
                 This action is permanent and cannot be undone.
               </p>
               
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button variant="destructive" className="w-full sm:w-auto flex items-center gap-2">
+                  <Button 
+                    variant="destructive" 
+                    className="w-full sm:w-auto flex items-center gap-2"
+                    disabled={isLoading}
+                  >
                     <RefreshCcw className="h-4 w-4" />
                     Reset Account Data
                   </Button>
@@ -656,6 +663,7 @@ export default function Settings() {
                         value={resetPassword}
                         onChange={(e) => setResetPassword(e.target.value)}
                         className="pr-10"
+                        disabled={isLoading}
                       />
                       <Button
                         type="button"
@@ -663,6 +671,7 @@ export default function Settings() {
                         size="icon"
                         className="absolute right-0 top-0 h-full w-10 text-muted-foreground"
                         onClick={() => setShowResetPassword(!showResetPassword)}
+                        disabled={isLoading}
                       >
                         {showResetPassword ? (
                           <EyeOff className="h-4 w-4" />
@@ -678,7 +687,12 @@ export default function Settings() {
                   
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleResetData}>Reset Data</AlertDialogAction>
+                    <AlertDialogAction 
+                      onClick={handleResetData}
+                      disabled={isLoading || resetPassword.length < 4}
+                    >
+                      {isLoading ? 'Resetting...' : 'Reset Data'}
+                    </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>

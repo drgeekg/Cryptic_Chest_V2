@@ -1,9 +1,8 @@
-
 import { useState, useEffect } from "react";
 import { StoredPassword, getPasswords, deletePassword } from "@/lib/db";
 import { PasswordItem } from "./PasswordItem";
 import { Input } from "@/components/ui/input";
-import { Loader2, Plus, Search } from "lucide-react";
+import { AlertCircle, Loader2, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,6 +15,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { PasswordForm } from "./PasswordForm";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface PasswordListProps {
   categoryId: string | null;
@@ -28,19 +28,28 @@ export function PasswordList({ categoryId, categoryName }: PasswordListProps) {
   const [filteredPasswords, setFilteredPasswords] = useState<StoredPassword[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedPassword, setSelectedPassword] = useState<StoredPassword | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
   
-  const loadPasswords = () => {
+  const loadPasswords = async () => {
     if (user) {
       setIsLoading(true);
-      // Simulating a loading state for demo
-      setTimeout(() => {
-        const userPasswords = getPasswords(user.id);
+      setLoadError(null);
+      
+      try {
+        console.log("Fetching passwords for user:", user.id);
+        const userPasswords = await getPasswords(user.id);
+        console.log("Passwords fetched:", userPasswords);
         setPasswords(userPasswords);
+      } catch (error) {
+        console.error("Failed to load passwords:", error);
+        setLoadError("Failed to load passwords. Please try again later.");
+        toast.error("Failed to load passwords");
+      } finally {
         setIsLoading(false);
-      }, 500);
+      }
     }
   };
   
@@ -79,12 +88,13 @@ export function PasswordList({ categoryId, categoryName }: PasswordListProps) {
     setShowEditDialog(true);
   };
   
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     try {
-      deletePassword(id);
+      await deletePassword(id);
       setPasswords(passwords.filter((p) => p.id !== id));
       toast.success("Password deleted successfully");
     } catch (error) {
+      console.error("Failed to delete password:", error);
       toast.error("Failed to delete password");
     }
   };
@@ -98,6 +108,49 @@ export function PasswordList({ categoryId, categoryName }: PasswordListProps) {
     setShowEditDialog(false);
     loadPasswords(); // Refresh the password list
   };
+
+  // Handle API error state
+  if (loadError) {
+    return (
+      <div className="space-y-6">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>
+            {loadError}
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="ml-2"
+              onClick={() => loadPasswords()}
+            >
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+
+        <Button className="gap-2" onClick={() => setShowAddDialog(true)}>
+          <Plus className="h-4 w-4" />
+          Add Password
+        </Button>
+
+        <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+          <DialogContent className="sm:max-w-[550px]">
+            <DialogHeader>
+              <DialogTitle>Add New Password</DialogTitle>
+              <DialogDescription>
+                Securely store your login credentials
+              </DialogDescription>
+            </DialogHeader>
+            <PasswordForm 
+              onClose={handleAddPasswordComplete} 
+              selectedCategoryId={categoryId}
+            />
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  }
   
   if (isLoading) {
     return (

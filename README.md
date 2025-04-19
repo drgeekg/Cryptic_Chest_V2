@@ -1,142 +1,150 @@
-# Cryptic Chest - Secure Password Manager
+# Cryptic Chest V2 - Secure Password Manager
+
+![Cryptic Chest Banner](public/android-chrome-512x512.png)
 
 ## Project Description
 
-Cryptic Chest is a secure password management application that allows users to safely store, organize, and manage their passwords and sensitive information.
+Cryptic Chest V2 is a secure, modern password management application that allows users to safely store, organize, and manage their passwords and sensitive information. This version features MongoDB integration for reliable cloud storage and robust security measures.
 
 ## Features
 
-- Secure password storage
-- Password generator
-- Category management
-- User authentication
-- Dark/light theme
-- Admin data reset functionality
+- **Secure Password Storage**: All passwords are encrypted before storage in MongoDB
+- **MongoDB Integration**: Cloud-based storage for reliable access across devices
+- **User Authentication**: Secure login and registration with JWT authentication
+- **Password Categories**: Organize passwords by categories
+- **Password Generator**: Create strong, unique passwords with customizable options
+- **Backup & Restore**: Export and import encrypted backups of your passwords
+- **Dark/Light/OLED Themes**: Choose your preferred visual style
+- **Color Scheme Options**: Customize the UI with various accent colors
+- **Account Management**: Change password, delete account, reset data
+- **Mobile-Responsive Design**: Optimized for all device sizes
 
 ## Technology Stack
 
 ### Frontend
-- **React**: A JavaScript library for building user interfaces
+- **React 18**: A JavaScript library for building user interfaces
 - **TypeScript**: Provides static type checking for enhanced code quality
 - **Vite**: Fast and modern build tool for frontend development
 - **React Router**: For application routing and navigation
-- **React Query**: For data fetching, caching, and state management
 - **Framer Motion**: For smooth animations and transitions
+- **Axios**: For API communication
+
+### Backend
+- **Node.js**: JavaScript runtime for server-side code
+- **Express**: Web framework for Node.js
+- **MongoDB**: NoSQL database for password storage
+- **Mongoose**: MongoDB object modeling for Node.js
+- **JWT**: JSON Web Tokens for secure authentication
+- **bcrypt.js**: For password hashing
 
 ### UI Components
-- **shadcn/ui**: A collection of reusable UI components built with Radix UI and Tailwind CSS
+- **shadcn/ui**: A collection of reusable UI components built with Radix UI
 - **Tailwind CSS**: Utility-first CSS framework for rapid UI development
 - **Lucide React**: Icon library with a clean and consistent design
-
-### Data Management
-- **LocalStorage**: Browser-based persistent storage for user data
-- **Custom Encryption**: Basic encryption implementation for password protection
+- **Sonner**: Minimal toast notifications
 
 ## Data Storage & Security
 
 ### Password Storage
-All password data in Cryptic Chest is stored locally in the user's browser using localStorage. The application does not send any password data to external servers, making it inherently secure against network attacks.
+All password data in Cryptic Chest V2 is stored in MongoDB with robust security measures:
 
-### Data Structure
-- **User data**: Stored with keys like `user_profile_[email]` and `user_password_[email]`
-- **Password entries**: Stored in localStorage under a structured format with user ID associations
+1. **Encryption**: Passwords are encrypted on the client-side before being sent to the server
+2. **User Isolation**: Each user's passwords are associated with their unique user ID
+3. **JWT Authentication**: All API requests require valid JWT tokens for access
 
 ### Encryption Implementation
-The application implements a basic encryption system for demonstration purposes:
+The application implements a reliable encryption system:
 
-1. **Encryption**: Passwords are encoded using Base64 encoding with a key verification component
-2. **Decryption**: When viewing stored passwords, they are decoded using the same key
-3. **Security**: The actual implementation is for demonstration only and would need to be replaced with proper encryption (like AES-256) in a production environment
+1. **Client-Side Encryption**: Passwords are encrypted in the browser before transmission
+2. **Unique Keys**: Each user has a unique encryption key derived from their credentials
+3. **Zero-Knowledge Design**: The server never has access to unencrypted passwords
 
-### Password Generation
-Cryptic Chest includes a robust password generator with options for:
-- Password length
-- Uppercase and lowercase letters
-- Numbers
-- Special symbols
+### Backup & Restore
+- **Encrypted Backups**: Export your passwords as an encrypted JSON file
+- **Recovery Phrases**: Each backup is protected with a unique recovery phrase
+- **Cross-Device Support**: Restore your passwords on any device
 
 ## Getting Started
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### Prerequisites
+- Node.js 18+ and npm
+- MongoDB (local instance or MongoDB Atlas)
 
-Follow these steps:
+### Installation
 
 ```sh
 # Step 1: Clone the repository
-git clone https://github.com/drgeekg/Cryptic_Chest_V2
+git clone https://github.com/yourusername/Cryptic_Chest_V2.git
 
 # Step 2: Navigate to the project directory
-cd cryptic-chest
+cd Cryptic_Chest_V2
 
-# Step 3: Install the necessary dependencies
+# Step 3: Install frontend dependencies
 npm install
 
-# Step 4: Start the development server
+# Step 4: Navigate to the server directory
+cd server
+
+# Step 5: Install server dependencies
+npm install
+
+# Step 6: Start the server
+npm run dev
+
+# Step 7: In a new terminal, navigate back to the root directory
+cd ..
+
+# Step 8: Start the frontend development server
 npm run dev
 ```
 
-The application will be available at http://localhost:8081 (or another port if 8081 is already in use).
+The application will be available at http://localhost:5173 and the API server will run on http://localhost:5000.
 
-## Authentication
+## Environment Setup
 
-This project uses a simulated authentication system with local storage for demonstration purposes. For new users after the latest update:
+The server expects a `.env` file in the server directory with the following variables:
 
-1. Register with your desired credentials
-2. Login using the same credentials
-3. For password changes, use the Profile page
+```
+PORT=5000
+MONGODB_URI=mongodb://127.0.0.1:27017/cryptic_chest_v2
+JWT_SECRET=your_jwt_secret_key
+```
 
-## Admin Reset Functionality
+Note: For security in production environments, you should never commit real secrets to your repository.
 
-The application includes an admin page to reset application data when needed:
+## API Routes
 
-### Accessing Admin Reset
+### Authentication
+- `POST /api/auth/register`: Register a new user
+- `POST /api/auth/login`: Login a user
+- `GET /api/auth/current-user`: Get the current authenticated user
+- `POST /api/auth/change-password`: Change user password
+- `POST /api/auth/recover`: Reset password using recovery phrase
+- `POST /api/auth/delete-account`: Delete a user account
 
-Navigate to: http://localhost:8081/admin/reset
+### Passwords
+- `GET /api/passwords`: Get all passwords for the authenticated user
+- `POST /api/passwords`: Create a new password
+- `PUT /api/passwords/:id`: Update a password
+- `DELETE /api/passwords/:id`: Delete a password
+- `DELETE /api/passwords/user/:userId`: Delete all passwords for a user
+- `GET /api/passwords/search`: Search passwords by query
+- `GET /api/passwords/category/:category`: Filter passwords by category
 
-### Available Reset Options
+## Contributing
 
-1. **Reset All Application Data**
-   - Completely removes all data from localStorage
-   - Erases all user accounts, passwords, and application settings
-   - Confirmation phrase: `RESET ALL DATA`
-
-2. **Reset User Data Only**
-   - Removes only user-related data (accounts, passwords)
-   - Preserves application settings and preferences
-   - Confirmation phrase: `RESET USERS`
-
-### Reset Process
-
-1. Navigate to the admin reset page
-2. Choose the appropriate reset option
-3. Type the exact confirmation phrase as shown
-4. Click the reset button
-5. After successful reset, you'll be redirected to the login page
-
-## Editing the Project
-
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s)
-- Click the "Edit" button (pencil icon) at the top right of the file view
-- Make your changes and commit the changes
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository
-- Click on the "Code" button (green button) near the top right
-- Select the "Codespaces" tab
-- Click on "New codespace" to launch a new Codespace environment
-- Edit files directly within the Codespace and commit and push your changes once you're done
-
-## Deployment
-
-You can deploy this application using services like:
-
-- Netlify
-- Vercel
-- GitHub Pages
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## License
 
-This project is private and proprietary.
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+
+- Icons by [Lucide](https://lucide.dev/)
+- UI components from [shadcn/ui](https://ui.shadcn.com/)
+- Animation by [Framer Motion](https://www.framer.com/motion/)

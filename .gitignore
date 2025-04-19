@@ -28,6 +28,8 @@ coverage
 .env.development.local
 .env.test.local
 .env.production.local
+# Allow server's .env file to be committed
+!server/.env
 
 # Editor directories and files
 .vscode/*
