@@ -1,6 +1,7 @@
 # Cryptic Chest V2 - Secure Password Manager
 
-![Cryptic Chest Banner](public/android-chrome-512x512.png)
+![Login Page](public/Login.png)
+![Dashboard](public/Dashboard.png)
 
 ## Project Description
 
@@ -88,17 +89,23 @@ cd server
 # Step 5: Install server dependencies
 npm install
 
-# Step 6: Start the server
+# Step 6: Start the backend server
 npm run dev
+```
 
-# Step 7: In a new terminal, navigate back to the root directory
+Open a **new terminal** for the next steps:
+
+```sh
+# Step 7: Navigate back to the root directory
 cd ..
 
 # Step 8: Start the frontend development server
 npm run dev
 ```
 
-The application will be available at http://localhost:5173 and the API server will run on http://localhost:5000.
+Ensure that your MongoDB server is running in a separate terminal or as a background service.
+
+The application will be available at http://localhost:8080 and the API server will run on http://localhost:5000.
 
 ## Environment Setup
 
